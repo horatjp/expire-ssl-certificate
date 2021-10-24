@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+usage()
+{
+    echo "Usage: $0 [ -p port ] [ -f format ] [ -d ] CommonName"
+    echo ""
+    echo "  -p port    : Port"
+    echo "  -f format  : Date Format"
+    echo "  -d         : Days left"
+    echo "  CommonName : Common Name"
+    echo ""
+}
+
+PORT="443"
+FORMAT="+%Y-%m-%d %H:%M:%S"
+DAY=false
+
+while getopts p:f:d option
+do
+    case "${option}"
+    in
+        p ) PORT=$OPTARG;;
+        f ) FORMAT=${OPTARG};;
+        d ) DAY=true;;
+        ? ) usage
+            exit 2 ;;
+    esac
+done
+
+shift `expr $OPTIND - 1`
+
+COMMON_NAME=$1
+
+if [ -z ${COMMON_NAME} ]
+then
+    usage
+    exit 2
+fi
+
+
+EXPIRE_DATE_STR=`echo | openssl s_client -connect $COMMON_NAME:$PORT 2>/dev/null | openssl x509 -noout -dates | grep notAfter | sed 's/notAfter=//'`
+
+
+# Validity check
+DATE_ERROR="$(date '+%s' -d "$EXPIRE_DATE_STR" 2>&1 > /dev/null)"
+
+if [ -z "$DATE_ERROR" ]; then
+
+    EXPIRE_DATE_TIME=`date '+%s' -d "$EXPIRE_DATE_STR"`
+fi
+
+if [ -z "$EXPIRE_DATE_TIME" ]; then
+    echo "Unable to get date." >&2
+    exit 1
+fi
+
+
+if "${DAY}"
+then
+
+    EXPIRE_DAY=$((($EXPIRE_DATE_TIME - `date '+%s'`)/86400))
+
+    echo $EXPIRE_DAY
+
+else
+    echo `date "$FORMAT" -d "@$EXPIRE_DATE_TIME"`
+fi
+
+exit 0
